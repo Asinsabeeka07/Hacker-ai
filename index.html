@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Interview Tracker - Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="bg-grid"></div>
+    
+    <!-- Navigation Sidebar -->
+    <nav class="sidebar">
+        <div class="logo">SIT</div>
+        <a href="index.html" class="nav-item active">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">Dashboard</span>
+        </a>
+        <a href="resume.html" class="nav-item">
+            <span class="nav-icon">📄</span>
+            <span class="nav-text">ATS Resume</span>
+        </a>
+        <a href="scheduler.html" class="nav-item">
+            <span class="nav-icon">🤖</span>
+            <span class="nav-text">Smart AI</span>
+        </a>
+        <a href="analytics.html" class="nav-item">
+            <span class="nav-icon">📈</span>
+            <span class="nav-text">Analytics</span>
+        </a>
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <div>
+                <h1>Dashboard</h1>
+                <p style="color: var(--text-secondary); margin-top: 5px;">Welcome back! You have <span id="interviewCount" style="color: var(--accent-red);">0</span> upcoming interviews</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="loadInterviews()">Refresh</button>
+                <div id="currentTime" style="font-size: 24px; font-weight: bold; color: var(--accent-red);"></div>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Quick Add Interview -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">➕</div>
+                    <span>Add New Interview</span>
+                </div>
+                <form id="interviewForm" onsubmit="addInterview(event)">
+                    <div class="input-group">
+                        <label>Company</label>
+                        <input type="text" id="company" required placeholder="e.g., Google">
+                    </div>
+                    <div class="input-group">
+                        <label>Role</label>
+                        <input type="text" id="role" required placeholder="e.g., Senior Developer">
+                    </div>
+                    <div class="input-group">
+                        <label>Date & Time</label>
+                        <input type="datetime-local" id="interviewDate" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Preparation Hours</label>
+                        <input type="number" id="prepHours" value="10" min="0">
+                    </div>
+                    <button type="submit" class="btn">Schedule Interview</button>
+                </form>
+            </div>
+
+            <!-- Upcoming List -->
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <div class="card-icon">📅</div>
+                    <span>Upcoming Interviews</span>
+                </div>
+                <div id="interviewList" class="interview-list">
+                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                        Loading...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Smart Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🎯</div>
+                    <span>Success Rate</span>
+                </div>
+                <div style="text-align: center; padding: 20px;">
+                    <div style="font-size: 48px; color: var(--accent-red); font-weight: bold;" id="avgProbability">0%</div>
+                    <div style="color: var(--text-secondary);">Average Probability</div>
+                </div>
+            </div>
+
+            <!-- Next Interview Countdown -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">⏰</div>
+                    <span>Next Interview</span>
+                </div>
+                <div style="text-align: center; padding: 20px;" id="countdownBox">
+                    <div style="font-size: 32px; color: var(--accent-red);" id="countdown">--</div>
+                    <div style="color: var(--text-secondary); font-size: 14px; margin-top: 10px;" id="nextCompany">No upcoming interviews</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">
+        <span class="toast-icon">🔔</span>
+        <span id="toastMessage"></span>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script>
+        // Page specific logic
+        async function loadInterviews() {
+            try {
+                const res = await fetch('/api/interviews');
+                const data = await res.json();
+                
+                document.getElementById('interviewCount').textContent = data.length;
+                
+                const list = document.getElementById('interviewList');
+                if (data.length === 0) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">No interviews scheduled. Add one!</div>';
+                    return;
+                }
+
+                // Calculate average probability
+                const avg = data.reduce((acc, curr) => acc + (curr.probability || 0), 0) / data.length;
+                document.getElementById('avgProbability').textContent = Math.round(avg || 0) + '%';
+
+                // Countdown for next interview
+                if (data[0]) {
+                    const nextDate = new Date(data[0].date);
+                    updateCountdown(nextDate, data[0].company);
+                }
+
+                list.innerHTML = data.map(interview => `
+                    <div class="interview-item">
+                        <div>
+                            <div class="company-name">${interview.company}</div>
+                            <div class="interview-date">${interview.role} • ${new Date(interview.date).toLocaleString()}</div>
+                            <div style="margin-top: 5px; font-size: 12px; color: var(--accent-red);">
+                                Success Probability: ${interview.probability || 'Pending'}%
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span class="status-badge">${interview.status || 'Scheduled'}</span>
+                            <button onclick="deleteInterview('${interview.id}')" style="background: transparent; border: none; color: var(--accent-red); cursor: pointer; font-size: 18px;">🗑️</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Error:', err);
+                showToast('Error loading interviews');
+            }
+        }
+
+        async function addInterview(e) {
+            e.preventDefault();
+            const company = document.getElementById('company').value;
+            const role = document.getElementById('role').value;
+            const date = document.getElementById('interviewDate').value;
+            const prepHours = document.getElementById('prepHours').value;
+
+            // Get prediction first
+            const predRes = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ company, role, preparationHours: parseInt(prepHours), resumeScore: 75 })
+            });
+            const predData = await predRes.json();
+
+            const interview = {
+                company,
+                role,
+                date,
+                prepHours,
+                probability: predData.probability,
+                status: 'Scheduled',
+                recommendation: predData.recommendation
+            };
+
+            const res = await fetch('/api/interviews', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(interview)
+            });
+
+            if (res.ok) {
+                showToast(`Interview added! Success probability: ${predData.probability}%`);
+                loadInterviews();
+                document.getElementById('interviewForm').reset();
+            }
+        }
+
+        async function deleteInterview(id) {
+            await fetch(`/api/interviews/${id}`, { method: 'DELETE' });
+            showToast('Interview deleted');
+            loadInterviews();
+        }
+
+        function updateCountdown(date, company) {
+            const update = () => {
+                const now = new Date();
+                const diff = date - now;
+                if (diff <= 0) {
+                    document.getElementById('countdown').textContent = 'NOW!';
+                    return;
+                }
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                document.getElementById('countdown').textContent = `${days}d ${hours}h ${mins}m`;
+                document.getElementById('nextCompany').textContent = `at ${company}`;
+            };
+            update();
+            setInterval(update, 60000);
+        }
+
+        // Load on start
+        loadInterviews();
+    </script>
+</body>
+</html>
